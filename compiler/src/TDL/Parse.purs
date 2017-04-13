@@ -7,10 +7,11 @@ import Control.MonadZero (guard)
 import Data.Array as Array
 import Data.Either (Either)
 import Data.Foldable (foldl, foldMap, foldr)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromJust, maybe)
 import Data.List (List(Nil))
 import Data.String as String
 import Data.Tuple.Nested ((/\))
+import Partial.Unsafe (unsafePartial)
 import Prelude
 import TDL.Syntax (Declaration(..), Doc(..), Kind(..), Module(..), PrimType(..), Type(..))
 import Text.Parsing.StringParser (ParseError, Parser, runParser)
@@ -38,8 +39,14 @@ type_ :: Parser Type
 type_ = pure unit >>= \_ -> type' unit
 
 type' :: Unit -> Parser Type
-type' _ = application
+type' _ = anonProduct
   where
+    anonProduct = do
+      ts <- application `PC.sepBy1` asteriskPunc
+      let f x Nothing = Just x
+          f x (Just y) = Just $ mkAnonProductType x y
+      pure <<< unsafePartial fromJust $ foldr f Nothing ts
+
     application = foldl AppliedType <$> simple <*> PC.many simple
 
     simple =     P.try (NamedType <$> identifier)
@@ -58,6 +65,8 @@ type' _ = application
     compoundType kw c = kw *> leftBracePunc *> (c <$> fields) <* rightBracePunc
     fields = Array.fromFoldable <$> field `PC.sepEndBy` commaPunc
     field  = P.try $ (/\) <$> identifier <*> (colonPunc *> type_)
+
+    mkAnonProductType a b = ProductType ["_1" /\ a, "_2" /\ b]
 
 --------------------------------------------------------------------------------
 
