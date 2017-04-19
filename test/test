@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+import contextlib
+import shutil
+import subprocess
+import os
+import os.path
+import tempfile
+import sys
+
+@contextlib.contextmanager
+def chdir(path):
+    original = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(original)
+
+def test_compiler():
+    with chdir('compiler'):
+        subprocess.check_call(['pulp', 'test'])
+
+def build_purescript_support():
+    subprocess.check_call(['bash', '-c', '''
+        set -e
+        if [ ! -e purescript ]; then
+            git clone --depth 1 git@github.com:TinkerTravel/purescript-tdl.git purescript
+        fi
+        (
+            cd purescript
+            git pull
+            rm -rf bower_components node_modules output
+            bower i
+            npm i
+            pulp build
+        )
+    '''])
+
+def test_cases():
+    for case in {os.path.splitext(p)[0] for p in os.listdir('test/cases')}:
+        if case.startswith('.'):
+            continue
+        print(case)
+
+        tdl_path = 'test/cases/{}.tdl' .format(case)
+        ps_path  = 'test/cases/{}.purs'.format(case)
+
+        with tempfile.TemporaryDirectory(prefix='tdltest') as tmp_path:
+            shutil.copyfile(ps_path, os.path.join(tmp_path, 'Main.purs'))
+            tdl_output = subprocess.check_output(
+                ['compiler/bin/tdlc', '--purescript', tdl_path],
+                universal_newlines=True)
+            output_filename = os.path.join(tmp_path, 'TDLOutput.purs')
+            with open(output_filename, 'w') as f:
+                print(tdl_output, file=f)
+
+            with chdir('purescript'):
+                subprocess.check_call([
+                    'pulp', 'build',
+                    '-I', tmp_path,
+                ])
+
+            with chdir('purescript'):
+                script = '''
+                    var Main = require('./output/Main');
+                    var status = 0;
+                    for (var prop in Main) {
+                        if (prop.charAt(0) === '_') {
+                            continue;
+                        }
+                        console.log(prop);
+                        var ok = Main[prop]();
+                        status = ok ? status : 1;
+                        console.log('  - ' + ok);
+                    }
+                    process.exit(status);
+                '''
+                subprocess.check_call(['node', '-e', script])
+
+def bower_install(path):
+    with chdir(path):
+        subprocess.check_call(['bower', 'install'])
+
+def main():
+    test_compiler()
+    build_purescript_support()
+    test_cases()
+
+if __name__ == '__main__':
+    if ('--with-bower-install' in sys.argv):
+        bower_install('compiler')
+        bower_install('purescript')
+    main()

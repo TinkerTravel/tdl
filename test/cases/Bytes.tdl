@@ -1,0 +1,3 @@
+module TDLOutput;
+
+type Bytes = bytes;

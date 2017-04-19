@@ -1,0 +1,10 @@
+module TDLOutput;
+
+type Ints : *;
+type Ints = array i32;
+
+type Units : *;
+type Units = array product { };
+
+type List : * -> *;
+type List = array;

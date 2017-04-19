@@ -1,0 +1,8 @@
+## Integers
+## are
+## fun!
+module TDLOutput;
+
+## An integer!
+type Pax : *;
+type Pax = i32;
