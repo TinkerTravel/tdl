@@ -15,6 +15,7 @@ import Prelude
 import TDL.Check (inferModule, prettyError, runCheck)
 import TDL.Extraction.Markdown (markdownModule)
 import TDL.Extraction.PureScript (pursModule)
+import TDL.Extraction.GraphViz as GV
 import TDL.Parse (parse)
 import TDL.Syntax (Doc(..))
 
@@ -25,7 +26,8 @@ main [extractorName, path] = do
   extractor <- case extractorName of
     "--purescript" -> pure $ pursModule
     "--markdown"   -> pure $ \x -> case markdownModule x of Doc d -> d
-    _ -> error ("Unknown extractor: " <> extractorName) *> exit 1
+    "--dot"        -> pure $ GV.digraphStr
+    _              -> error ("Unknown extractor: " <> extractorName) *> exit 1
   text <- readTextFile UTF8 path
   compile extractor text
   where compile extractor s =
